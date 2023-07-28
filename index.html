@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Visualization</title>
+
+    <style type="text/css">
+      body {
+        background: #17101f;
+        font-family: monospace;
+      }
+      #mynetwork {
+        width: 100vw;
+        height: 100vh;
+      }
+
+      a {
+        color: #fff;
+        text-shadow: #fff 1px 1px 2px;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline !important;
+      }
+
+      .header {
+        position: absolute;
+        z-index: 10;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.8);
+        border-bottom: 1px solid #322436;
+
+        height: 60px;
+        color: #fefefe;
+      }
+    </style>
+
+    <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.0/dist/es-module-shims.js" crossorigin="anonymous"></script>
+<script type="importmap">
+{
+  "imports": {
+    "alpinejs": "https://ga.jspm.io/npm:alpinejs@3.12.3/dist/module.esm.js",
+    "vis-network": "https://ga.jspm.io/npm:vis-network@9.1.6/peer/umd/vis-network.min.js"
+  },
+  "scopes": {
+    "https://ga.jspm.io/": {
+      "vis-data/peer/umd/vis-data.js": "https://ga.jspm.io/npm:vis-data@7.1.6/peer/umd/vis-data.js"
+    }
+  }
+}
+</script>
+<script type="module">
+      import * as vis from "vis-network"
+      import Alpine from "alpinejs"
+
+      document.addEventListener("alpine:init", () => {
+        Alpine.store("isDownloading", true)
+        Alpine.store("stabilizationProgress", -1)
+      })
+
+      Alpine.start()
+
+      const [edges, nodes] = await Promise.all([
+        fetch("edges.json").then((res) => res.json()),
+        fetch("nodes.json")
+          .then((res) => res.json())
+          .then((v) =>
+            v.map((node) => ({
+              ...node,
+              id: node.fid,
+              label: node.username,
+              title: node.fullname,
+              image: `https://res.cloudinary.com/merkle-manufactory/image/fetch/c_fill,f_jpg,w_80/${node.avatar}`,
+            }))
+          ),
+      ])
+
+      Alpine.store("isDownloading", false)
+
+      function getRandomItemsFromArray(arr, count) {
+        const sampledItems = []
+        while (sampledItems.length < count && arr.length > 0) {
+          const randomIndex = Math.floor(Math.random() * arr.length)
+          sampledItems.push(arr[randomIndex])
+          arr.splice(randomIndex, 1)
+        }
+        return sampledItems
+      }
+
+      function draw() {
+        // create a network
+        var container = document.getElementById("mynetwork")
+        var data = {
+          edges: edges,
+          nodes: nodes,
+        }
+        console.log(data)
+        var options = {
+          layout: { improvedLayout: false },
+          nodes: {
+            color: {
+              background: "#3F3360",
+              border: "#322436",
+
+              highlight: {
+                border: "#322436",
+                background: "#7C65C1",
+              },
+            },
+            shape: "circularImage",
+            size: 20,
+            scaling: {
+              min: 10,
+              max: 30,
+            },
+            font: {
+              size: 12,
+              face: "Tahoma",
+              color: "#FEFEFE",
+            },
+          },
+          edges: {
+            //hidden: true,
+            smooth: {
+              type: "continuous",
+            },
+          },
+          physics: {
+            enabled: false,
+            forceAtlas2Based: {
+              gravitationalConstant: -0.3,
+              centralGravity: 0,
+              springConstant: 0.02,
+              springLength: 100,
+              damping: 0.025,
+              avoidOverlap: 5.0,
+            },
+            maxVelocity: 1200,
+            minVelocity: 5,
+            solver: "forceAtlas2Based",
+            stabilization: {
+              enabled: true,
+              iterations: 500,
+              updateInterval: 10,
+              onlyDynamicEdges: false,
+              fit: true,
+            },
+            timestep: 1,
+            adaptiveTimestep: true,
+          },
+          interaction: {
+            tooltipDelay: 100,
+            hideEdgesOnDrag: true,
+          },
+        }
+
+        console.log("Creating a network...")
+        var network = new vis.Network(container, data, options)
+        network.on("stabilizationProgress", (progress) => {
+          Alpine.store(
+            "stabilizationProgress",
+            progress.iterations / progress.total
+          )
+          console.log(progress)
+        })
+
+        network.stabilize()
+        console.log("Network created...")
+      }
+
+      draw()
+    </script>
+  </head>
+
+  <body x-data>
+    <div class="header">
+      <div
+        style="
+          display: flex;
+          flex-direction: row;
+          align-content: center;
+          align-items: center;
+          justify-content: space-between;
+          margin: 0 auto;
+          width: 100%;
+          max-width: 1140px;
+          height: 100%;
+        "
+      >
+        <div>
+          <div>Farcaster Social Graph</div>
+        </div>
+        <div x-show="$store.isDownloading">Downloading graph...</div>
+        <div
+          x-show="!$store.isDownloading && $store.stabilizationProgress < 1"
+          style="display: none"
+        >
+          Stabilization in progress...
+          <progress
+            id="file"
+            x-bind:value="Math.floor($store.stabilizationProgress * 100)"
+            max="100"
+          ></progress>
+          <span x-text=""></span>
+        </div>
+        <div style="display: flex; flex-direction: row; align-items: center">
+          <div>[Github]</div>
+          &nbsp;
+          <div style="opacity: 0.8">
+            by
+            <a href="https://warpcast.com/nobuilder.eth">@nobuilder.eth</a> and
+            <a href="https://warpcast.com/woj.eth">@woj.eth</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="mynetwork"></div>
+  </body>
+</html>
